@@ -28,6 +28,9 @@ int evil_mode;			// nonzero iff this peer should behave badly
 static struct in_addr listen_addr;	// Define listening endpoint
 static int listen_port;
 
+#define CHILDLIMIT 10
+static int nChilds = 0;
+
 
 /*****************************************************************************
  * TASK STRUCTURE
@@ -290,21 +293,30 @@ static size_t read_tracker_response(task_t *t)
 
 	while (1) {
 		// Check for whether buffer is complete.
-		for (; pos+3 < t->tail; pos++)
-			if ((pos == 0 || t->buf[pos-1] == '\n')
-			    && isdigit((unsigned char) t->buf[pos])
-			    && isdigit((unsigned char) t->buf[pos+1])
-			    && isdigit((unsigned char) t->buf[pos+2])) {
+		for (; pos+3 < t->tail; pos++, t->head++)
+    {
+      printf("pos is %d || t->tail is %d || t->head is %d\n", 
+             pos, t->tail, t->head);
+			if ((pos == 0 || t->buf[(pos-1) % TASKBUFSIZ] == '\n')
+			    && isdigit((unsigned char) t->buf[pos % TASKBUFSIZ])
+			    && isdigit((unsigned char) t->buf[(pos+1) % TASKBUFSIZ])
+			    && isdigit((unsigned char) t->buf[(pos+2) % TASKBUFSIZ])) {
+        printf("line 304\n");
 				if (split_pos == (size_t) -1)
-					split_pos = pos;
+					split_pos = pos % TASKBUFSIZ;
 				if (pos + 4 >= t->tail)
+        {
+          printf("line 309\n");
 					break;
-				if (isspace((unsigned char) t->buf[pos + 3])
-				    && t->buf[t->tail - 1] == '\n') {
-					t->buf[t->tail] = '\0';
+        }
+				if (isspace((unsigned char) t->buf[(pos + 3) %TASKBUFSIZ])
+				    && t->buf[(t->tail - 1)%TASKBUFSIZ] == '\n') {
+          printf("line 314\n");
+					t->buf[t->tail%TASKBUFSIZ] = '\0';
 					return split_pos;
 				}
 			}
+    }
 
 		// If not, read more data.  Note that the read will not block
 		// unless NO data is available.
@@ -313,6 +325,8 @@ static size_t read_tracker_response(task_t *t)
 			die("tracker read error");
 		else if (ret == TBUF_END)
 			die("tracker connection closed prematurely!\n");
+    else
+      printf("ret: %d\n", ret);
 	}
 }
 
@@ -480,6 +494,9 @@ task_t *start_download(task_t *tracker_task, const char *filename)
 
 	// add peers
 	s1 = tracker_task->buf;
+  printf("%s", tracker_task->buf);
+  printf("------------------\n");
+  printf("%s", tracker_task->buf + messagepos);
 	while ((s2 = memchr(s1, '\n', (tracker_task->buf + messagepos) - s1))) {
 		if (!(p = parse_peer(s1, s2 - s1)))
 			die("osptracker responded to WANT command with unexpected format!\n");
@@ -760,11 +777,13 @@ int main(int argc, char *argv[])
 
 	// First, download files named on command line.
 	for (; argc > 1; argc--, argv++)
+    // FORK!!!
 		if ((t = start_download(tracker_task, argv[1])))
 			task_download(t, tracker_task);
 
 	// Then accept connections from other peers and upload files to them!
 	while ((t = task_listen(listen_task)))
+    // FORK!!!
 		task_upload(t);
 
 	return 0;
