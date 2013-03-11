@@ -194,6 +194,27 @@ taskbufresult_t write_from_taskbuf(int fd, task_t *t)
 	unsigned tailpos = (t->tail % TASKBUFSIZ);
 	ssize_t amt;
 
+  /* ORIGINAL ****************************************************************/
+	if (t->head == t->tail || headpos < tailpos)
+		amt = read(fd, &t->buf[tailpos], TASKBUFSIZ - tailpos);
+	else
+		amt = read(fd, &t->buf[tailpos], headpos - tailpos);
+
+	if (amt == -1 && (errno == EINTR || errno == EAGAIN
+			  || errno == EWOULDBLOCK))
+		return TBUF_AGAIN;
+	else if (amt == -1)
+		return TBUF_ERROR;
+	else if (amt == 0)
+		return TBUF_END;
+	else {
+		t->tail += amt;
+		return TBUF_OK;
+	}
+  /* END ORIGINAL ************************************************************/
+
+  /* MODIFIED CODE... seemed to be causing errors ****************************/
+#if 0
 	if (t->head == t->tail)
 		return TBUF_END;
 	else if (headpos < tailpos)
@@ -213,6 +234,8 @@ taskbufresult_t write_from_taskbuf(int fd, task_t *t)
 		t->total_written += amt;
 		return TBUF_OK;
 	}
+#endif
+  /* END MODIFIED CODE... seemed to be causing errors ************************/
 }
 
 
@@ -291,27 +314,58 @@ static size_t read_tracker_response(task_t *t)
 	size_t split_pos = (size_t) -1, pos = 0;
 	t->head = t->tail = 0;
 
+  /* ORIGINAL ****************************************************************/
+	while (1) {
+		// Check for whether buffer is complete.
+		for (; pos+3 < t->tail; pos++)
+			if ((pos == 0 || t->buf[pos-1] == '\n')
+			    && isdigit((unsigned char) t->buf[pos])
+			    && isdigit((unsigned char) t->buf[pos+1])
+			    && isdigit((unsigned char) t->buf[pos+2])) {
+				if (split_pos == (size_t) -1)
+					split_pos = pos;
+				if (pos + 4 >= t->tail)
+					break;
+				if (isspace((unsigned char) t->buf[pos + 3])
+				    && t->buf[t->tail - 1] == '\n') {
+					t->buf[t->tail] = '\0';
+					return split_pos;
+				}
+			}
+
+		// If not, read more data.  Note that the read will not block
+		// unless NO data is available.
+		int ret = read_to_taskbuf(t->peer_fd, t);
+		if (ret == TBUF_ERROR)
+			die("tracker read error");
+		else if (ret == TBUF_END)
+			die("tracker connection closed prematurely!\n");
+	}
+  /* END ORIGINAL ************************************************************/
+
+  /* MODIFIED CODE... seemed to be causing errors ****************************/
+#if 0
 	while (1) {
 		// Check for whether buffer is complete.
 		for (; pos+3 < t->tail; pos++, t->head++)
     {
-      printf("pos is %d || t->tail is %d || t->head is %d\n", 
-             pos, t->tail, t->head);
+      //printf("pos is %d || t->tail is %d || t->head is %d\n", 
+             //pos, t->tail, t->head);
 			if ((pos == 0 || t->buf[(pos-1) % TASKBUFSIZ] == '\n')
 			    && isdigit((unsigned char) t->buf[pos % TASKBUFSIZ])
 			    && isdigit((unsigned char) t->buf[(pos+1) % TASKBUFSIZ])
 			    && isdigit((unsigned char) t->buf[(pos+2) % TASKBUFSIZ])) {
-        printf("line 304\n");
+        //printf("line 304\n");
 				if (split_pos == (size_t) -1)
 					split_pos = pos % TASKBUFSIZ;
 				if (pos + 4 >= t->tail)
         {
-          printf("line 309\n");
+          //printf("line 309\n");
 					break;
         }
 				if (isspace((unsigned char) t->buf[(pos + 3) %TASKBUFSIZ])
 				    && t->buf[(t->tail - 1)%TASKBUFSIZ] == '\n') {
-          printf("line 314\n");
+          //printf("line 314\n");
 					t->buf[t->tail%TASKBUFSIZ] = '\0';
 					return split_pos;
 				}
@@ -325,9 +379,11 @@ static size_t read_tracker_response(task_t *t)
 			die("tracker read error");
 		else if (ret == TBUF_END)
 			die("tracker connection closed prematurely!\n");
-    else
-      printf("ret: %d\n", ret);
+  /*    else
+      printf("ret: %d\n", ret);*/
 	}
+#endif
+  /* END MODIFIED CODE... seemed to be causing errors ************************/
 }
 
 
@@ -494,9 +550,9 @@ task_t *start_download(task_t *tracker_task, const char *filename)
 
 	// add peers
 	s1 = tracker_task->buf;
-  printf("%s", tracker_task->buf);
-  printf("------------------\n");
-  printf("%s", tracker_task->buf + messagepos);
+  //printf("%s", tracker_task->buf);
+  //printf("------------------\n");
+  //printf("%s", tracker_task->buf + messagepos);
 	while ((s2 = memchr(s1, '\n', (tracker_task->buf + messagepos) - s1))) {
 		if (!(p = parse_peer(s1, s2 - s1)))
 			die("osptracker responded to WANT command with unexpected format!\n");
