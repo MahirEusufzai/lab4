@@ -61,7 +61,10 @@ typedef struct task {
 	int peer_fd;		// File descriptor to peer/tracker, or -1
 	int disk_fd;		// File descriptor to local file, or -1
 
-	char buf[TASKBUFSIZ];	// Bounded buffer abstraction
+	//char buf[TASKBUFSIZ];	// Bounded buffer abstraction
+  char *buf;
+  int buf_size;
+  
 	unsigned head;
 	unsigned tail;
 	size_t total_written;	// Total number of bytes written
@@ -94,6 +97,12 @@ static task_t *task_new(tasktype_t type)
 	t->head = t->tail = 0;
 	t->total_written = 0;
 	t->peer_list = NULL;
+  t->buf = (char *) malloc(sizeof(char)*TASKBUFSIZ);
+  if (!t->buf) {
+    errno = ENOMEM;
+    return NULL;
+  }
+  t->buf_size = TASKBUFSIZ;
 
 	strcpy(t->filename, "");
 	strcpy(t->disk_filename, "");
@@ -135,6 +144,8 @@ static void task_free(task_t *t)
 		do {
 			task_pop_peer(t);
 		} while (t->peer_list);
+    if(t->buf)
+      free(t->buf);
 		free(t);
 	}
 }
@@ -162,12 +173,17 @@ typedef enum taskbufresult {		// Status of a read or write attempt.
 //	The task buffer is capped at TASKBUFSIZ.
 taskbufresult_t read_to_taskbuf(int fd, task_t *t)
 {
-	unsigned headpos = (t->head % TASKBUFSIZ);
-	unsigned tailpos = (t->tail % TASKBUFSIZ);
+  if(t->tail == ((size_t) t->buf_size)) {
+    char *temp = realloc(t->buf,t->buf_size+TASKBUFSIZ);
+    t->buf_size += TASKBUFSIZ;
+    t->buf = temp;
+  }
+	unsigned headpos = (t->head % t->buf_size);
+	unsigned tailpos = (t->tail % t->buf_size);
 	ssize_t amt;
 
 	if (t->head == t->tail || headpos < tailpos)
-		amt = read(fd, &t->buf[tailpos], TASKBUFSIZ - tailpos);
+		amt = read(fd, &t->buf[tailpos], t->buf_size - tailpos);
 	else
 		amt = read(fd, &t->buf[tailpos], headpos - tailpos);
 
@@ -195,26 +211,6 @@ taskbufresult_t write_from_taskbuf(int fd, task_t *t)
 	ssize_t amt;
 
   /* ORIGINAL ****************************************************************/
-	if (t->head == t->tail || headpos < tailpos)
-		amt = read(fd, &t->buf[tailpos], TASKBUFSIZ - tailpos);
-	else
-		amt = read(fd, &t->buf[tailpos], headpos - tailpos);
-
-	if (amt == -1 && (errno == EINTR || errno == EAGAIN
-			  || errno == EWOULDBLOCK))
-		return TBUF_AGAIN;
-	else if (amt == -1)
-		return TBUF_ERROR;
-	else if (amt == 0)
-		return TBUF_END;
-	else {
-		t->tail += amt;
-		return TBUF_OK;
-	}
-  /* END ORIGINAL ************************************************************/
-
-  /* MODIFIED CODE... seemed to be causing errors ****************************/
-#if 0
 	if (t->head == t->tail)
 		return TBUF_END;
 	else if (headpos < tailpos)
@@ -232,6 +228,26 @@ taskbufresult_t write_from_taskbuf(int fd, task_t *t)
 	else {
 		t->head += amt;
 		t->total_written += amt;
+		return TBUF_OK;
+	}
+  /* END ORIGINAL ************************************************************/
+
+  /* MODIFIED CODE... seemed to be causing errors ****************************/
+#if 0
+	if (t->head == t->tail || headpos < tailpos)
+		amt = read(fd, &t->buf[tailpos], TASKBUFSIZ - tailpos);
+	else
+		amt = read(fd, &t->buf[tailpos], headpos - tailpos);
+
+	if (amt == -1 && (errno == EINTR || errno == EAGAIN
+			  || errno == EWOULDBLOCK))
+		return TBUF_AGAIN;
+	else if (amt == -1)
+		return TBUF_ERROR;
+	else if (amt == 0)
+		return TBUF_END;
+	else {
+		t->tail += amt;
 		return TBUF_OK;
 	}
 #endif
