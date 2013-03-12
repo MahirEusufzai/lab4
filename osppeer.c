@@ -20,6 +20,7 @@
 #include <pwd.h>
 #include <time.h>
 #include <limits.h>
+#include <wait.h>
 #include "md5.h"
 #include "osp2p.h"
 
@@ -600,7 +601,7 @@ static void task_download(task_t *t, task_t *tracker_task)
 		error("* No peers are willing to serve '%s'\n",
 		      (t ? t->filename : "that file"));
 		task_free(t);
-		return;
+		_exit(0); /* instead of "return;" for parallelism */
 	} else if (t->peer_list->addr.s_addr == listen_addr.s_addr
 		   && t->peer_list->port == listen_port)
 		goto try_again;
@@ -639,7 +640,7 @@ static void task_download(task_t *t, task_t *tracker_task)
 		error("* Too many local files like '%s' exist already.\n\
 * Try 'rm %s.~*~' to remove them.\n", t->filename, t->filename);
 		task_free(t);
-		return;
+		_exit(0); /* instead of "return;" for parallelism */
 	}
 
 	// Read the file into the task buffer from the peer,
@@ -672,7 +673,7 @@ static void task_download(task_t *t, task_t *tracker_task)
 			(void) read_tracker_response(tracker_task);
 		}
 		task_free(t);
-		return;
+		_exit(0); /* instead of "return;" for parallelism */
 	}
 	error("* Download was empty, trying next peer\n");
 
@@ -779,6 +780,7 @@ int main(int argc, char *argv[])
 	char *s;
 	const char *myalias;
 	struct passwd *pwent;
+  pid_t pid;
 
 	// Default tracker is read.cs.ucla.edu
 	osp2p_sscanf("131.179.80.139:11111", "%I:%d",
@@ -849,9 +851,26 @@ int main(int argc, char *argv[])
 
 	// First, download files named on command line.
 	for (; argc > 1; argc--, argv++)
+  {
     // FORK!!!
-		if ((t = start_download(tracker_task, argv[1])))
-			task_download(t, tracker_task);
+    pid = fork();
+    if (pid == -1)
+    {
+      die("Error: fork()ing error\n");
+    }
+    else if (pid != 0)
+    {  // Parent
+      continue;
+    }
+    else
+    {  // Child
+      printf("Child with id: %d downloading %s\n", getpid(), argv[1]);
+      if ((t = start_download(tracker_task, argv[1])))
+        task_download(t, tracker_task);
+      printf("CHILD SHOULDN'T GET HERE\n");
+      _exit(0);
+    }
+  }
 
 	// Then accept connections from other peers and upload files to them!
 	while ((t = task_listen(listen_task)))
