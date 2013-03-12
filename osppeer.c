@@ -898,23 +898,27 @@ int main(int argc, char *argv[])
 	// First, download files named on command line.
 	for (; argc > 1; argc--, argv++)
   {
-    // FORK!!!
-    pid = blocking_fork();
-    if (pid == -1)
+    /* moved this outside the fork */
+    if ((t = start_download(tracker_task, argv[1])))
     {
-      die("Error: fork()ing error\n");
-    }
-    else if (pid != 0)
-    {  // Parent
-      continue;
-    }
-    else
-    {  // Child
-      printf("Child with id: %d downloading %s\n", getpid(), argv[1]);
-      if ((t = start_download(tracker_task, argv[1])))
+      // FORK!!!
+      pid = blocking_fork();
+      if (pid == -1)
+      {
+        die("Error: fork()ing error\n");
+      }
+      else if (pid != 0)
+      {  // Parent
+        continue;
+      }
+      else
+      {  // Child
+        printf("Child with id: %d downloading %s\n", getpid(), argv[1]);
+        /* start_download was here, inside of fork before */
         task_download(t, tracker_task);
-      printf("CHILD SHOULDN'T GET HERE\n");
-      _exit(0);
+        printf("CHILD SHOULDN'T GET HERE\n");
+        _exit(0);
+      }
     }
   }
 
