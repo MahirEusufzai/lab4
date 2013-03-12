@@ -33,6 +33,50 @@ static int listen_port;
 static int nChilds = 0;
 
 
+/* BLOCKING_FORK code ********************************************************/
+pid_t blocking_fork()
+{
+  pid_t pid;
+  int stat;
+
+  if (nChilds < CHILDLIMIT)
+  {
+    nChilds++;
+    return fork();
+  }
+  else
+  {
+    while (nChilds != 0)
+    {
+      pid = waitpid(-1, &stat, WNOHANG);
+      if (pid == -1)
+      { // Wait error
+        die("Error: waitpid returned -1 in blocking_fork()");
+      }
+      else if (pid == 0)
+      { 
+        if (nChilds == CHILDLIMIT)
+        { // No child died, block until one does
+          while (waitpid(-1, &stat, 0) && WIFEXITED(stat))
+            /* just wait until an exit */;
+          return fork();
+        }
+        else
+        { // At least one child has finished, but no more are available
+          break;
+        }
+      }
+      else
+      {
+        nChilds--;
+      }
+    }
+    nChilds++;
+    return fork();
+  }
+}
+
+
 /*****************************************************************************
  * TASK STRUCTURE
  * Holds all information relevant for a peer or tracker connection, including
@@ -853,7 +897,7 @@ int main(int argc, char *argv[])
 	for (; argc > 1; argc--, argv++)
   {
     // FORK!!!
-    pid = fork();
+    pid = blocking_fork();
     if (pid == -1)
     {
       die("Error: fork()ing error\n");
@@ -876,7 +920,7 @@ int main(int argc, char *argv[])
 	while ((t = task_listen(listen_task)))
   {
     // FORK!!!
-    pid = fork();
+    pid = blocking_fork();
     if (pid == -1)
     {
       die("Error: fork()ing error\n");
