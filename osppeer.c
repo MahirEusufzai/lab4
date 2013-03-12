@@ -251,8 +251,8 @@ taskbufresult_t read_to_taskbuf(int fd, task_t *t)
 //	techniques and identical return values as read_to_taskbuf.
 taskbufresult_t write_from_taskbuf(int fd, task_t *t)
 {
-	unsigned headpos = (t->head % TASKBUFSIZ);
-	unsigned tailpos = (t->tail % TASKBUFSIZ);
+	unsigned headpos = (t->head % t->buf_size);
+	unsigned tailpos = (t->tail % t->buf_size);
 	ssize_t amt;
 
   /* ORIGINAL ****************************************************************/
@@ -261,7 +261,7 @@ taskbufresult_t write_from_taskbuf(int fd, task_t *t)
 	else if (headpos < tailpos)
 		amt = write(fd, &t->buf[headpos], tailpos - headpos);
 	else
-		amt = write(fd, &t->buf[headpos], TASKBUFSIZ - headpos);
+		amt = write(fd, &t->buf[headpos], t->buf_size - headpos);
 
 	if (amt == -1 && (errno == EINTR || errno == EAGAIN
 			  || errno == EWOULDBLOCK))
@@ -401,6 +401,8 @@ static size_t read_tracker_response(task_t *t)
 			die("tracker read error");
 		else if (ret == TBUF_END)
 			die("tracker connection closed prematurely!\n");
+    if(split_pos != (size_t) -1)
+      pos = split_pos;
 	}
   /* END ORIGINAL ************************************************************/
 
