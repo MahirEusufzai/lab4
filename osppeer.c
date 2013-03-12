@@ -813,6 +813,8 @@ static void task_upload(task_t *t)
 
     exit:
 	task_free(t);
+  /* actually exit, for parallelism */
+  _exit(0);
 }
 
 
