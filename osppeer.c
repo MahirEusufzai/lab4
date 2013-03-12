@@ -874,8 +874,24 @@ int main(int argc, char *argv[])
 
 	// Then accept connections from other peers and upload files to them!
 	while ((t = task_listen(listen_task)))
+  {
     // FORK!!!
-		task_upload(t);
+    pid = fork();
+    if (pid == -1)
+    {
+      die("Error: fork()ing error\n");
+    }
+    else if (pid != 0)
+    {  // Parent
+      continue;
+    }
+    else
+    {  // Child
+      task_upload(t);
+      printf("CHILD SHOULDN'T GET HERE\n");
+      _exit(0);
+    }
+  }
 
 	return 0;
 }
