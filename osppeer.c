@@ -24,7 +24,7 @@
 #include "md5.h"
 #include "osp2p.h"
 
-int evil_mode;			// nonzero iff this peer should behave badly
+int evil_mode = 0;			// nonzero iff this peer should behave badly
 
 static struct in_addr listen_addr;	// Define listening endpoint
 static int listen_port;
@@ -764,6 +764,47 @@ static task_t *task_listen(task_t *listen_task)
 	return t;
 }
 
+// task_endless_byte_attack()
+// serves an infinite stream of bytes, as inspired by a question on piazza
+//
+// much of this code is from task_upload and write_from_taskbuf
+//
+// in a non-robust peer, a call to task_download will never return/exit
+static void task_endless_byte_attack(task_t *t)
+{
+  uint8_t deadbeef[5] = { 0xde, 0xad, 0xbe, 0xef, 0x00};
+  int amt;
+
+	assert(t->type == TASK_UPLOAD);
+	// First, read the request from the peer.
+	while (1) {
+		int ret = read_to_taskbuf(t->peer_fd, t);
+		if (ret == TBUF_ERROR) {
+			error("* Cannot read from connection");
+			goto exit;
+		} else if (ret == TBUF_END
+			   || (t->tail && t->buf[t->tail-1] == '\n'))
+			break;
+	}
+
+	assert(t->head == 0);
+	if (osp2p_snscanf(t->buf, t->tail, "GET %s OSP2P\n", t->filename) < 0) {
+		error("* Odd request %.*s\n", t->tail, t->buf);
+		goto exit;
+	}
+	t->head = t->tail = 0;
+
+  // start writing
+  printf("starting to write");
+  while(1)
+  {
+    amt = write(t->peer_fd, deadbeef, 5);
+    printf("wrote %d\n", amt);
+  }
+
+exit:
+  return;
+}
 
 // task_upload(t)
 //	Handles an upload request from another peer.
@@ -797,6 +838,19 @@ static void task_upload(task_t *t)
       error("Odd request %s\n", t->filename);
       goto exit;
     }
+
+
+
+  /* KEATON'S ATTEMPT AT DIRECTORY HIDING
+   * a very basic form of not allowing downloads from outside the directory
+   *  (still susceptible to symlink problems) *
+  if ((t->filename[0] == '\0') || (t->filename[0] == '/')
+      || ((t->filename[0] == '.') && (t->filename[1] == '.')))
+  {
+    errno = EACCES;
+    error("* Attempt at access outside of directory or empty filename");
+    goto exit;
+  } */
 
 	t->disk_fd = open(t->filename, O_RDONLY);
 	if (t->disk_fd == -1) {
@@ -940,6 +994,7 @@ int main(int argc, char *argv[])
 	// Then accept connections from other peers and upload files to them!
 	while ((t = task_listen(listen_task)))
   {
+    printf("task_listen returned non-zero\n");
     // FORK!!!
     pid = blocking_fork();
     if (pid == -1)
@@ -948,11 +1003,24 @@ int main(int argc, char *argv[])
     }
     else if (pid != 0)
     {  // Parent
+      task_free(t);
       continue;
     }
     else
     {  // Child
-      task_upload(t);
+      printf("received an upload request!\n");
+      if (evil_mode == 1)
+      {
+
+        // be evil
+        task_endless_byte_attack(t);
+      }
+      else
+      {
+        // be nice
+        printf("going to task upload\n");
+        task_upload(t);
+      }
       printf("CHILD SHOULDN'T GET HERE\n");
       _exit(0);
     }
