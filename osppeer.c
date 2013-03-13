@@ -595,6 +595,11 @@ task_t *start_download(task_t *tracker_task, const char *filename)
 	size_t messagepos;
 	assert(tracker_task->type == TASK_TRACKER);
 
+  if(strlen(filename) > (FILENAMESIZ-1)) {
+    error("* File name too long: %s\n",filename);
+    goto exit;
+  }  
+  
 	message("* Finding peers for '%s'\n", filename);
 
 	osp2p_writef(tracker_task->peer_fd, "WANT %s\n", filename);
