@@ -710,7 +710,7 @@ task_t *start_download(task_t *tracker_task, const char *filename)
 	assert(tracker_task->type == TASK_TRACKER);
 
   /*Prevent buffer overflow*/
-  if(strnlen(filename,FILENAMESIZ) == FILENAMESIZ-1 {
+  if(strnlen(filename,FILENAMESIZ) == FILENAMESIZ) {
     error("* File name too long: %s\n",filename);
     goto exit;
   }  
@@ -1024,7 +1024,7 @@ static void task_endless_deadbeef_attack(task_t *t)
 	assert(t->head == 0);
   
   /*Prevent buffer overflow*/
-  int bad_size = FILENAMESIZ+11;
+  unsigned int bad_size = FILENAMESIZ+11;
   if(strnlen(t->buf,bad_size) == bad_size) {
     error("* File name too long %.*s\n",t->tail,t->buf);
     goto exit;
@@ -1066,7 +1066,7 @@ static void task_upload(task_t *t)
 	assert(t->head == 0);
   
   /*Prevent buffer overflow*/
-  int bad_size = FILENAMESIZ+11;
+  unsigned int bad_size = FILENAMESIZ+11;
   if(strnlen(t->buf,bad_size) == bad_size) {
     error("* File name too long %.*s\n",t->tail,t->buf);
     goto exit;
