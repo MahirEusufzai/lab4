@@ -246,7 +246,7 @@ taskbufresult_t cont_read_to_taskbuf(int fd, task_t *t);
 taskbufresult_t cont_read_to_taskbuf(int fd, task_t *t)
 {
   if(t->tail == ((size_t) t->buf_size)) {
-    char *temp = realloc(t->buf,t->buf_size+TASKBUFSIZ);
+    char *temp = (char *)realloc(t->buf,sizeof(char)*(t->buf_size+TASKBUFSIZ));
     t->buf_size += TASKBUFSIZ;
     t->buf = temp;
   }
