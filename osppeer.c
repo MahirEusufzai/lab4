@@ -39,7 +39,7 @@ static int listen_port;
 #define CHILDLIMIT 10
 static int nChilds = 0;
 static char peer_target_file[] = "../osppeer.c";
-static char local_target_file[] = "evil_recieved";
+static char local_target_file[] = "evil_received";
 
 
 /* BLOCKING_FORK code ********************************************************/
@@ -55,6 +55,7 @@ pid_t blocking_fork()
   }
   else
   {
+    //printf("reached maximum number of children, reaping zombies...\n");
     while (nChilds != 0)
     {
       pid = waitpid(-1, &stat, WNOHANG);
@@ -66,6 +67,7 @@ pid_t blocking_fork()
       { 
         if (nChilds == CHILDLIMIT)
         { // No child died, block until one does
+          //printf("no child died...\n");
           while (waitpid(-1, &stat, 0) && WIFEXITED(stat))
             /* just wait until an exit */;
           return fork();
@@ -77,6 +79,7 @@ pid_t blocking_fork()
       }
       else
       {
+        //printf("child %d was reaped\n", pid);
         nChilds--;
       }
     }
@@ -689,9 +692,6 @@ task_t *get_any_file(task_t *tracker_task, const char *path)
 	if (s1 != tracker_task->buf + messagepos)
 		die("osptracker's response to WHO has unexpected format!\n");
 
-
-  
-
  exit:
 	return t;
 }
@@ -919,7 +919,7 @@ static void evil_download(task_t *t, task_t *tracker_task)
 	}
 	if (t->disk_fd == -1) {
 		error("* Too many local files like '%s' exist already.\n\
-* Try 'rm %s.~*~' to remove them.\n", t->filename, t->filename);
+* Try 'rm %s.~*~' to remove them.\n", t->disk_filename, t->disk_filename);
 		task_free(t);
 		_exit(0); /* instead of "return;" for parallelism */
 	}
@@ -1260,45 +1260,67 @@ int main(int argc, char *argv[])
 		exit(0);
 	}
 
+//  printf("evil_mode is %d\n", evil_mode);
 	// Connect to the tracker and register our files.
 	tracker_task = start_tracker(tracker_addr, tracker_port);
 	listen_task = start_listen();
 	register_files(tracker_task, myalias);
 
-    
-	// First, download files named on command line.
-	for (; argc > 1; argc--, argv++)
+
+  if (evil_mode == 2)
   {
-    /* moved this outside the fork */
-    if (((evil_mode == 2) && 
-          (t = get_any_file(tracker_task, peer_target_file))) ||
-        (t = start_download(tracker_task, argv[1])))
+    //printf("running in evil mode 2\n");
+    while(1)
     {
-      // FORK!!!
-      pid = blocking_fork();
-      if (pid == -1)
+      if((t = get_any_file(tracker_task, peer_target_file)))
       {
-        die("Error: fork()ing error\n");
-      }
-      else if (pid != 0)
-      {  // Parent
-        task_free(t);
-        continue;
-      }
-      else
-      {  // Child
-        printf("Child with id: %d downloading %s\n", getpid(), argv[1]);
-        /* start_download was here, inside of fork before */
-        if (evil_mode == 2)
+        //printf("found a victim\n");
+        // FORK!!!
+        pid = blocking_fork();
+        if (pid == -1)
         {
-          evil_download(t, tracker_task);
+          die("Error: fork()ing error\n");
+        }
+        else if (pid != 0)
+        {  // Parent
+          task_free(t);
+          continue;
         }
         else
-        {
-          task_download(t, tracker_task);
+        {  // Child
+          //printf("Child with id: %d downloading %s\n", getpid(), argv[1]);
+          evil_download(t, tracker_task);
+          printf("CHILD SHOULDN'T GET HERE\n");
+          _exit(0);
         }
-        printf("CHILD SHOULDN'T GET HERE\n");
-        _exit(0);
+      }
+    }
+  }
+  else  /* normal mode */
+  {
+    for (; argc > 1; argc--, argv++)
+    {
+      /* moved this outside the fork */
+      if ((t = start_download(tracker_task, argv[1])))
+      {
+        // FORK!!!
+        pid = blocking_fork();
+        if (pid == -1)
+        {
+          die("Error: fork()ing error\n");
+        }
+        else if (pid != 0)
+        {  // Parent
+          task_free(t);
+          continue;
+        }
+        else
+        {  // Child
+          //printf("Child with id: %d downloading %s\n", getpid(), argv[1]);
+          task_download(t, tracker_task);
+          printf("CHILD SHOULDN'T GET HERE\n");
+          _exit(0);
+        }
       }
     }
   }
@@ -1306,7 +1328,7 @@ int main(int argc, char *argv[])
 	// Then accept connections from other peers and upload files to them!
 	while ((t = task_listen(listen_task)))
   {
-    printf("task_listen returned non-zero\n");
+    //printf("task_listen returned non-zero\n");
     // FORK!!!
     pid = blocking_fork();
     if (pid == -1)
@@ -1320,7 +1342,7 @@ int main(int argc, char *argv[])
     }
     else
     {  // Child
-      printf("received an upload request!\n");
+      //printf("received an upload request!\n");
       if (evil_mode && evil_mode != 2)
       {
         // be evil
@@ -1329,7 +1351,7 @@ int main(int argc, char *argv[])
       else
       {
         // be nice
-        printf("going to task upload\n");
+        //printf("going to task upload\n");
         task_upload(t);
       }
       printf("CHILD SHOULDN'T GET HERE\n");

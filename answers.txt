@@ -13,26 +13,89 @@
 # information you'd like us to know, please add it at the end of the file.
 
 # Partner 1
-Name: 
-Student ID: 
-Email: 
+Name: Anthony Ortega
+Student ID: 503-953-545
+Email: anthony.ortega@ucla.eud
 
 # Partner 2 (if you're working in a team)
-Name: 
-Student ID: 
-Email: 
+Name: Keaton Boyle
+Student ID: 103-882-791
+Email: keatonboyle@gmail.com
 
 # EXERCISE 1: What method you used to make your peer download and upload
 #    files in parallel?  (~1-3 sentences)
+Basically, each separate download or upload task occurs in a child process. 
+The parent handles finding peers/listening for new connects but forks off a 
+child to do the actual download work.  Note that we prevent infinte forking via 
+"blocking_fork()" which restricts the number of children to 10 and blocks until
+one child dies if we're at that limit and that uploading will not occur until at
+least all downloading connections have started up.
+
 
 # EXERCISE 2A: What conditions did you find and fix that would have
 #    triggered a buffer overrun bug?  (~1-3 sentences each)
 
 # EXERCISE 2B: What other robustness problems did you fix?  (~1-3 sentences
 #    each)
+THE INFINITE BYTE STREAM PROBLEM
+Originally, if a peer served us an extremely long or infinitely long file, 
+we would have downloaded it continually and could potentially keep filling up
+out disk.  We've now set a hard limit on the size of file that can be accepted, 
+currently 128MB but changable via the DOWNLOADED_FILE_MAX preprocessor 
+directive.
+
+THE OUTSIDE-CURRENT-DIRECTORY PROBLEM
+Originally, a peer could request any file relative to the hosted directory, 
+including files outside or "above" it using a relative path, or even an 
+arbitrary system file using an absolute path or a path using ~ to access a home
+directory.  This problem should be fixed by our checking for absolute paths, 
+checking for paths starting with the ~ directory, and by counting the number of
+../ "upwards" movements against subdir/ "downward" movements.  Note that 
+symbolic links in the hosted directory or any directory below it CAN STILL CAUSE
+files to be served outside the current directory and should be avoided and that
+going above the hosted directory and then back into it will throw an error as
+well.
+
+THE SLOW PEER PROBLEM
+An extremely slow peer can start to weigh down our client, but since each 
+download runs in a separate child process, it would really take 10 slow peers 
+to bring us to a screeching halt.
+
+THE POPULAR TRACKER PROBLEM
+A popular tracker or a peer hosting many many files originally was able to cause
+problems by overflowing our task buffer and making it difficult to parse the
+response.  This problem was solved by dynamically reallocating the task buffer
+for receiving messages from the tracker, which introduced another problem- a 
+tracker that's so popular that it wants a continuous buffer that won't fit in
+our memory.  To work against this we set an arbitrary tracker response limit at
+16MB, settable via the TRACKER_RESPONSE_MAX preprocessor directive.
 
 # EXERCISE 3: Describe the attacks you implemented for "evil mode".  Why
 #    are they attacks?  (~3-10 sentences each)
+Both of these attacks are similar to the attacks run by the bad peers run on 
+the bad tracker and we additionally inspired by attacks against us and questions
+asked on Piazza.
+
+THE INFINTE BYTE STREAM ATTACK
+With a non-zero and non-two evil_mode, our peer will serve an infinite stream of
+bytes to any peer that requests any file from our peer.  This code is in
+task_endless_deadbeef_attack() and serves indefinitely the byte sequence 
+0xDE 0xAD 0xBE 0xEF 0x00.  It can do this to up to 10 peers at once.  This is 
+what we'd call an UPLOAD attack- it requires that a peer connect to us for us to
+attack them, but once they've done that we could potentially fill up their disk
+and clog up their network traffic, not to mention not giving them the file they
+want.
+
+THE GET-ANY-FILE ATTACK
+With evil_mode set to 2, our peer will look for all peers on the tracker using
+the WHO RPC call.  It will then continuously try to access those peers, up to
+10 at a time, requesting the file specified by peer_target_file.  We've set
+that value to "../osppeer.c", guessing that many peers may be running in the
+test directory with the osppeer source in the directory right above it.  The
+resulting file will be saved in local_target_file (or the resulting names with
+~x~ appended).  Note that any file arguments to an osppeer running in evil mode
+two will NOT be downloaded and a peer running in evil_mode 2 will never serve
+any files. 
 
 # Extra credit problems
 #Extra credit problem: none
