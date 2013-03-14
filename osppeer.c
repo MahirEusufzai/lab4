@@ -285,12 +285,12 @@ taskbufresult_t cont_read_to_taskbuf(int fd, task_t *t)
 
 taskbufresult_t orig_read_to_taskbuf(int fd, task_t *t)
 {
-	unsigned headpos = (t->head % TASKBUFSIZ);
-	unsigned tailpos = (t->tail % TASKBUFSIZ);
+	unsigned headpos = (t->head % t->buf_size);
+	unsigned tailpos = (t->tail % t->buf_size);
 	ssize_t amt;
 
 	if (t->head == t->tail || headpos < tailpos)
-		amt = read(fd, &t->buf[tailpos], TASKBUFSIZ - tailpos);
+		amt = read(fd, &t->buf[tailpos], t->buf_size - tailpos);
 	else
 		amt = read(fd, &t->buf[tailpos], headpos - tailpos);
 
