@@ -15,7 +15,7 @@
 # Partner 1
 Name: Anthony Ortega
 Student ID: 503-953-545
-Email: anthony.ortega@ucla.eud
+Email: anthony.ortega@ucla.edu
 
 # Partner 2 (if you're working in a team)
 Name: Keaton Boyle
@@ -37,7 +37,7 @@ least all downloading connections have started up.
 THE LONG FILENAME PROBLEM
 We found that if a peer requested a file with a really long file name
 it would cause a buffer overflow. This would also occur if a given file
-name from the command line argument was long enough. We prevented
+name from the command line argument was long enough. We prevent
 these issues by ensuring that the filenames are within the right size.
 If the filenames are too big, our program will output a message saying so.
 
