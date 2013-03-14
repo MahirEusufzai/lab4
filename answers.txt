@@ -34,6 +34,11 @@ least all downloading connections have started up.
 
 # EXERCISE 2A: What conditions did you find and fix that would have
 #    triggered a buffer overrun bug?  (~1-3 sentences each)
+THE LONG FILENAME PROBLEM
+We found that if a peer requested a file with a really long file name
+it would cause a buffer overflow. This would also occur if a given file
+name from the command line argument was long enough. We prevented
+these issues by ensuring that the filenames are within the right size.
 
 # EXERCISE 2B: What other robustness problems did you fix?  (~1-3 sentences
 #    each)
