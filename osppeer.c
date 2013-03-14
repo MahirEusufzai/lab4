@@ -649,7 +649,7 @@ static peer_t *parse_peer(const char *s, size_t len)
 //  and then requests the file "path" from it.  We do not know if the victim 
 //  has s, but this will be fine for system files like /etc/passwd
 //
-// uses lost of code from start_download and download_task
+// uses lots of code from start_download and download_task
 task_t *get_any_file(task_t *tracker_task, const char *path)
 {
 	char *s1, *s2;
@@ -709,7 +709,8 @@ task_t *start_download(task_t *tracker_task, const char *filename)
 	size_t messagepos;
 	assert(tracker_task->type == TASK_TRACKER);
 
-  if(strlen(filename) > (FILENAMESIZ-1)) {
+  /*Prevent buffer overflow*/
+  if(strnlen(filename,FILENAMESIZ) == FILENAMESIZ) {
     error("* File name too long: %s\n",filename);
     goto exit;
   }  
@@ -1021,6 +1022,14 @@ static void task_endless_deadbeef_attack(task_t *t)
 	}
 
 	assert(t->head == 0);
+  
+  /*Prevent buffer overflow*/
+  unsigned int bad_size = FILENAMESIZ+11;
+  if(strnlen(t->buf,bad_size) == bad_size) {
+    error("* File name too long %.*s\n",t->tail,t->buf);
+    goto exit;
+  }
+  
 	if (osp2p_snscanf(t->buf, t->tail, "GET %s OSP2P\n", t->filename) < 0) {
 		error("* Odd request %.*s\n", t->tail, t->buf);
 		goto exit;
@@ -1055,6 +1064,14 @@ static void task_upload(task_t *t)
 	}
 
 	assert(t->head == 0);
+  
+  /*Prevent buffer overflow*/
+  unsigned int bad_size = FILENAMESIZ+11;
+  if(strnlen(t->buf,bad_size) == bad_size) {
+    error("* File name too long %.*s\n",t->tail,t->buf);
+    goto exit;
+  }  
+  
 	if (osp2p_snscanf(t->buf, t->tail, "GET %s OSP2P\n", t->filename) < 0) {
 		error("* Odd request %.*s\n", t->tail, t->buf);
 		goto exit;
@@ -1277,6 +1294,7 @@ int main(int argc, char *argv[])
       }
       else if (pid != 0)
       {  // Parent
+        task_free(t);
         continue;
       }
       else
