@@ -1042,6 +1042,7 @@ static void task_endless_deadbeef_attack(task_t *t)
 
 exit:
   /* actually exit, for parallelism */
+  task_free(t);
   _exit(0);
 }
 
