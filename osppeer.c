@@ -1152,19 +1152,6 @@ static void task_upload(task_t *t)
 
     
 
-
-
-  int depth = 0;
-  if ((t->filename[0] == '\0') || (t->filename[0] == '/')
-      || ((t->filename[0] == '.') && 
-          (t->filename[1] == '.') && 
-          (t->filename[2] == '/')))
-  {
-    errno = EACCES;
-    error("* Attempt at access outside of directory or empty filename");
-    goto exit;
-  } */
-
 	t->disk_fd = open(t->filename, O_RDONLY);
 	if (t->disk_fd == -1) {
 		error("* Cannot open file %s", t->filename);
