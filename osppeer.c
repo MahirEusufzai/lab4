@@ -1061,6 +1061,7 @@ static void task_upload(task_t *t)
 	}
 	t->head = t->tail = 0;
   
+  /*
   //Make sure it doesn't try to acess a directory
   int ii;
   for(ii = 0; t->filename[ii] != '\0'; ii++)
@@ -1068,12 +1069,75 @@ static void task_upload(task_t *t)
       error("Odd request %s\n", t->filename);
       goto exit;
     }
+    */
 
 
 
-  /* KEATON'S ATTEMPT AT DIRECTORY HIDING
-   * a very basic form of not allowing downloads from outside the directory
-   *  (still susceptible to symlink problems) *
+  /* Don't access outside the directory */
+  // Check for root or home
+  if ((t->filename[0] == '\0') || // no path 
+      (t->filename[0] == '/') ||  // or absolute path
+      ((t->filename[0] == '~')    // or home
+         && ((t->filename[1] == '\0') || (t->filename[1] == '/'))))
+  {
+    errno = EACCES;
+    error("* Attempt at access outside of directory or empty filename");
+    goto exit;
+  }
+  // Check for going "above" current directory
+  int depth = 0; // if this goes negative we're in trouble
+  char *ci = t->filename;
+  while (*ci != '\0')
+  {
+    if (*ci == '.')
+    {
+      if (*(ci+1) == '.')
+      {
+        if (*(ci+2) == '/') /***** '../' with any number of slashes following */
+        {      
+          ci += 3;          
+          depth--;
+          while (*ci == '/') {ci++;} // absorb any extra slashes
+        }
+        else /**************************************** filename includes '..' */
+        {
+          ci += 2;        
+        }
+      }
+      else if (*(ci+1) == '/')/**** './' with any number of slashes following */
+      {
+        ci += 2;
+        while (*ci == '/') {ci++;} //absorb any extra slashes
+      }
+      else /* (*(c+1) != '/' and != '.') *//*********** filename includes '.' */
+      {
+        ci++;      
+      }
+    }
+    else if (*ci == '/') /********************* '/' w/o periods: subdirectory */
+    {
+      ci++;
+      depth++;
+      while (*ci == '/') {ci++;} //absorb any extra slashes
+    }
+    else /* (*ci != '/' and != '.') *//************** just a normal character */
+    {
+      ci++;
+    }
+
+    if (depth < 0)
+    {
+      errno = EACCES;
+      error("* Attempt at access outside of directory or empty filename");
+      goto exit;
+    }
+  }
+
+    
+
+
+
+  int depth = 0;
   if ((t->filename[0] == '\0') || (t->filename[0] == '/')
       || ((t->filename[0] == '.') && 
           (t->filename[1] == '.') && 
